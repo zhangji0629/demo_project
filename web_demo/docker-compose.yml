@@ -1,0 +1,139 @@
+version: "3.3"
+
+services:
+  demo_server:
+    image: golang:latest
+    container_name: "web_demo"
+    working_dir: /srv
+    ports:
+      - "8888:8080"
+    volumes:
+      - $PWD/:/srv
+    command: /bin/bash -c "go mod tidy && go build -o app . && ./app"
+    environment:
+      - GO111MODULE=on
+      - CGO_ENABLED=0
+  redis:
+    container_name: myredis
+    image: "redis:alpine"
+    command: redis-server
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - $PWD/redis-data:/data
+      - $PWD/redis.conf:/usr/local/etc/redis/redis.conf
+
+    environment:
+      - REDIS_REPLICATION_MODE=master
+  mysql:
+    container_name: "demo-mysql"
+    image: mysql:5.7
+    ports:
+      - "3336:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=test
+    networks:
+      app_net:
+        ipv4_address: 10.10.10.1
+
+  nginx:
+    container_name: nginx
+    image: nginx
+    restart: always
+    ports:
+      - 8080:80
+    privileged: true
+    networks:
+      - mynginx
+
+
+# https://blog.csdn.net/u013652477/article/details/107837931
+# mkdir -p nginx nginx/conf.d nginx/html nginx/logs
+# cp /usr/local/etc/nginx/nginx.conf .
+
+  nginx_demo:
+    container_name: nginx_demo
+    #使用的镜像
+    image: nginx:1.16.1
+    working_dir: /nginx
+    #容器的映射端口
+    ports:
+      - 81:8080
+      - 443:443
+    #定义挂载点
+    volumes:
+      - $PWD/nginx/html:/nginx/html
+      - $PWD/nginx/nginx.conf:/nginx/nginx.conf
+      - $PWD/nginx/conf.d:/nginx/conf.d
+      - $PWD/nginx/logs:/nginx/logs
+    #docker 重启后，容器自启动
+    restart: always
+
+
+  # https://yeasy.gitbook.io/docker_practice/etcd/etcdctl
+  # https://garutilorenzo.github.io/deploy-high-available-etcd-cluster-using-docker/
+  # https://apache.googlesource.com/apisix/+/HEAD/t/cli/docker-compose-etcd-cluster.yaml
+  # https://cdmana.com/2022/03/202203120628593546.html
+  etcd0:
+    image: "gcr.io/etcd-development/etcd:v3.4.15"
+    container_name: etcd0
+    ports:
+      - "23800:2380"
+      - "23790:2379"
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd0
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://127.0.0.1:23790
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd0:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd0=http://etcd0:2380,etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+  etcd1:
+    image: "gcr.io/etcd-development/etcd:v3.4.15"
+    container_name: etcd1
+    ports:
+      - "23801:2380"
+      - "23791:2379"
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd1
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://127.0.0.1:23791
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd1:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd0=http://etcd0:2380,etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+  etcd2:
+    image: "gcr.io/etcd-development/etcd:v3.4.15"
+    container_name: etcd2
+    ports:
+      - "23802:2380"
+      - "23792:2379"
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd2
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://127.0.0.1:23792
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd2:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd0=http://etcd0:2380,etcd1=http://etcd1:2380,etcd2=http://etcd2:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+
+
+networks:
+  #配置docker network
+  app_net:
+    driver: bridge
+    ipam:
+      config:
+        # 子网络
+        - subnet: 10.10.0.0/16
+  mynginx:
+    driver: bridge
+
